@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 
-ds = xr.open_dataset('ci_sim_data.nc')
+ds = xr.open_dataset('ci_sim_data_m=40.nc')
 params = ds['params'].attrs
 cis = ds['cis']
 r2ers = cis.coords['r2er']
@@ -54,7 +54,8 @@ rej_uneven = ps_uneven<(0.01/(np.product(s.shape)))
 
 colors = ['c', 'r', 'g']
 for i in range(3): 
-    plt.errorbar(r2ers, ms[:,i], yerr=ses[:,i], color=colors[i])
+    #plt.errorbar(r2ers, ms[:,i], yerr=ses[:,i], color=colors[i])
+    plt.errorbar(r2ers, ms[:,i],color=colors[i])
 plt.legend(['Non-parametric bootstrap', 'Parametric bootstrap', 'Hybrid bayes'])
 
 for i in range(3):
@@ -64,9 +65,11 @@ for i in range(3):
 plt.ylabel('Fraction CI contain true ${r}^2_{ER}$')
 plt.xlabel(r'${r}^2_{ER}$')
 plt.grid()
+plt.tight_layout()
+plt.savefig('ci_sim_npbs_pbs_hb_m=40.pdf')
 #%%
 plt.figure(figsize=(10,3))
-sub_samp = 1
+sub_samp = 10
 r2er_ind = 3
 r2er = r2ers[r2er_ind]
 yticks = np.linspace(0,1,5)
@@ -75,18 +78,20 @@ r2_er = r2ers[r2er_ind]
 cis[0, r2er_ind, ::sub_samp, 0].plot()
 cis[0, r2er_ind, ::sub_samp, 1].plot()
 plt.ylim(0,1.1)
-plt.plot([0,500], [r2er,r2er])
+plt.plot([0,3000], [r2er,r2er])
 plt.ylabel(r'${r}^2_{ER}$')
 plt.xlabel('simulation')
 plt.legend(['lower CI', 'upper CI', 'True $r^2_{ER}$'])
 plt.title('Non parametric\nbootstrap')
+plt.gca().set_xticklabels([])
+
 plt.subplot(132)
 
 cis[1, r2er_ind, ::sub_samp, 0].plot()
 cis[1, r2er_ind, ::sub_samp, 1].plot()
 plt.title('')
 plt.ylim(0,1.1)
-plt.plot([0,500], [r2er,r2er])
+plt.plot([0,3000], [r2er,r2er])
 plt.gca().set_yticklabels([])
 plt.gca().set_xticklabels([])
 plt.ylabel('')
@@ -100,12 +105,14 @@ plt.subplot(133)
 cis[2, r2er_ind, ::sub_samp, 0].plot()
 cis[2, r2er_ind, ::sub_samp, 1].plot()
 plt.ylim(0,1.1)
-plt.plot([0,500], [r2er,r2er])
+plt.plot([0,3000], [r2er,r2er])
 plt.gca().set_yticklabels([])
 plt.gca().set_xticklabels([])
 plt.ylabel('')
 plt.xlabel('')
 plt.title('Hybrid bayes')
+plt.tight_layout()
+plt.savefig('ci_sim_npbs_pbs_hb_m=40_example_sim.pdf')
 
 #%%
 cis[2, r2er_ind, ::sub_samp, 0].plot()

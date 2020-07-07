@@ -89,13 +89,13 @@ res = xr.open_dataarray('./figs/r2er_n2m_sim/vary_r2er.nc')
 ax[0].hist(res.sel(r2=1, est='r2').squeeze())
 ax[0].hist(res.sel(r2=1, est='r2c').squeeze())
 ax[0].plot([1,1], [0,680], c='k')
-ax[0].set_ylabel('Estimate of $r^2$ count');
+ax[0].set_ylabel('Count');
 
 ax[0].legend(['True $r^2$','Naive $\hat{r}^2$','Corrected $\hat{r}^2_{ER}$', ],
              fontsize=8)
 
 ax[0].set_xlim(0,1.2);ax[0].set_ylim(0,700);
-ax[0].set_xlabel('Estimate of $r^2$');
+ax[0].set_xlabel('Estimate');
 
 
 resq = res.quantile(quantiles, 'sim')
@@ -111,7 +111,7 @@ ticks = np.linspace(0,1,5)
 ax[1].set_xlim(0,1.1);ax[1].set_ylim(0,1.1);
 ax[1].set_xticks(ticks);ax[1].set_yticks(ticks);
 ax[1].axis('square');ax[1].grid()
-ax[1].set_ylabel('Estimate of $r^2$');ax[1].set_xlabel('True $r^2$');
+ax[1].set_ylabel('Estimate');ax[1].set_xlabel('True $r^2_{ER}$');
 
 ax[1].plot([0,1], [0,1], c='k', lw=3);
 

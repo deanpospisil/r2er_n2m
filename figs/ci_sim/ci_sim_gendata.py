@@ -13,7 +13,17 @@ import common as rc
 import numpy as np
 from tqdm import tqdm
 from scipy.stats import norm
+from scipy import stats
 import xarray as xr 
+import multiprocessing as mp
+
+
+def percentile(x,q):
+    inds = np.argsort(x)
+    ind = int((len(x)-1)*q/100)
+    val = x[inds[ind]]
+    return val
+    
 
 def trunc_ud(u, l, x):
     x = np.array(x)
@@ -113,6 +123,7 @@ def r2c_n2m_ci_from_post(trace, n, m, r2c_hat_obs, alpha_targ=0.10, nr2cs=50,
 
 def sample_post_s2_d2(x, n_samps, trunc_sig2=[0, np.inf], trunc_d2=[0, np.inf]):
     n, m = x.shape
+    #get the observed statistics
     hat_sig2 = x.var(0, ddof=1).mean(0)#central chisquared
     hat_d2 = x.mean(0).var(0, ddof=1)#non-central chisquared
     #make sure they don't go outside range
@@ -141,30 +152,32 @@ def sample_post_s2_d2(x, n_samps, trunc_sig2=[0, np.inf], trunc_d2=[0, np.inf]):
         sig2_cand, d2_cand = np.random.normal(loc=[sig2_curr, d2_curr], 
                                               scale=[vs2**0.5, vd2**0.5])
         
+        sig2_cand = trunc_ud_scalar(trunc_sig2[1], trunc_sig2[0], sig2_cand)
+        d2_cand = trunc_ud_scalar(trunc_d2[1], trunc_d2[0], d2_cand)
+        
         scale = sig2_cand/(n*(m-1))
         fd2_cand = (ncx2._pdf(hat_d2*(scale**-1), 
                             df = m-1, 
-                            nc = (d2_cand*m)/(sig2_cand/n))*(scale**-1)*
-                    int((d2_cand<=trunc_d2[1])*
-                        (d2_cand>=trunc_d2[0])))
+                            nc = (d2_cand*m)/(sig2_cand/n))*(scale**-1))
         
         scale = sig2_curr/(n*(m-1))
         fd2_curr = ncx2._pdf(hat_d2*(scale**-1), 
                             df=m-1, 
                             nc=(d2_curr*m)/(sig2_curr/n))*(scale**-1)
         
+        
         scale = sig2_cand/(m*(n-1))
-        fs2_cand = (ncx2._pdf(hat_sig2*(scale**-1), 
+        fs2_cand = ncx2._pdf(hat_sig2*(scale**-1), 
                              df=m*(n-1), 
-                             nc=0)*(scale**-1)*
-                    int((sig2_cand<=trunc_sig2[1])*
-                        (sig2_cand>=trunc_sig2[0])))
+                             nc=0)*(scale**-1)
+                    
         scale = sig2_curr/(m*(n-1))
         fs2_curr = ncx2._pdf(hat_sig2*(scale**-1), 
                              df=m*(n-1), 
                              nc=0)*(scale**-1)
         
         a = (fs2_cand*fd2_cand)/(fs2_curr*fd2_curr)
+        
         if a>=1:
             sig2_curr = sig2_cand
             d2_curr = d2_cand
@@ -196,6 +209,7 @@ def get_emp_dist_r2er(r2c_check, r2c_hat_obs, trace, m, n,
       x, y = pds_n2m_r2c(theta, 1, ddof=1)
       res[j] = (rc.r2c_n2m(x.squeeze(), y)[0]).squeeze()
     return res
+
 
 def find_sgn_p_cand(r2c_check, r2c_hat_obs, alpha_targ, trace, m, n,
                     p_thresh=0.01, n_r2c_sims = 100):
@@ -283,7 +297,7 @@ def get_hyb_bayes_ci(x, y, n_r2c_sims=1000, alpha_targ=0.1, p_thresh=0.01, n_spl
 def get_npbs_ci(x, y, alpha_targ, n_bs_samples=1000):
     y_bs = []
     for k in range(n_bs_samples):
-        _ = np.array([np.random.choice(y_obs, size=n) for y_obs in a_y.T]).T
+        _ = np.array([np.random.choice(y_obs, size=n) for y_obs in y.T]).T
         y_bs.append(_)
     y_bs = np.array(y_bs)
     r2c_bs = rc.r2c_n2m(x.squeeze(), y_bs)[0].squeeze()
@@ -302,13 +316,68 @@ def get_pbs_ci(x, y, alpha_targ, n_pbs_samples=1000):
     ci = np.quantile(r2c_pbs, [alpha_targ/2, 1 - alpha_targ/2]).T
 
     return ci
-import multiprocessing as mp
+
+def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
+    #need percentiles alpha and 1-alpha
+    z_alpha = stats.norm.ppf(alpha/2)
+    z_1_alpha = stats.norm.ppf(1-alpha/2)
+    m = y.shape[-1]
+    n = y.shape[-2]
+    #get bootstrap factors, or replace this with NPS
+    # y_obs = y
+    # y_bs = []
+    # for k in range(n_bs_samples):
+    #     _ = np.array([np.random.choice(y_obs, size=n, replace=True) 
+    #                   for y_obs in y.T]).T
+    #     y_bs.append(_)
+    # y_bs = np.array(y_bs)
+    # r2c_bs = rc.r2c_n2m(a_x.squeeze(), y_bs)[0].squeeze()
+    r2c_hat_obs = rc.r2c_n2m(x.squeeze(), y)[0].squeeze()
+    hat_sig2 = s2_hat_obs_n2m(y)
+    hat_mu2y = mu2_hat_unbiased_obs_n2m(y)
+    theta = [r2c_hat_obs, hat_sig2, 1, hat_mu2y, m, n] 
+    x_new, y_new = pds_n2m_r2c(theta, n_bs_samples, ddof=1)
+    
+    r2c_pbs = rc.r2c_n2m(x_new.squeeze(), y_new)[0].squeeze()
+    
+    #jack knife
+    jack_r2c = []
+    for i in range(m):
+        jack_y = np.array([y[:,j] for j in range(m) if i!=j]).T
+        jack_x = np.array([x[j] for j in range(m) if i!=j])
+        _ = rc.r2c_n2m(jack_x, jack_y)[0].squeeze()
+        jack_r2c.append(_.squeeze())
+        
+    jack_r2c = np.array(jack_r2c)
+    jack_r2c_dot = jack_r2c.mean()
+    
+    #need bias correction factor
+    z_hat_0 = stats.norm.ppf(np.mean(r2c_pbs<r2c_hat_obs))
+    
+    #estimate of coefficient fit theta-variance relationship as linear
+    a_hat = (np.sum((jack_r2c_dot - jack_r2c)**3)/
+             (6.*(np.sum((jack_r2c_dot - jack_r2c)**2))**(3/2.)))
+    
+    
+    alpha_1 = stats.norm.cdf(z_hat_0 + 
+                             (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0)))
+    
+    alpha_2 = stats.norm.cdf(z_hat_0 + 
+                             (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
+    
+    #ci_low = np.nanpercentile(r2c_pbs, alpha_1*100, interpolation='lower')
+    #ci_high = np.nanpercentile(r2c_pbs, alpha_2*100, interpolation='lower')  
+    
+    ci_low = percentile(r2c_pbs, alpha_1*100)
+    ci_high = percentile(r2c_pbs, alpha_2*100)
+    
+    return [ci_low, ci_high]
 
 #%% set of parameters over which to test
-m = 10
+m = 40
 n =  4
-n_exps = 2
-r2s = np.linspace(0, 1, 1)
+n_exps = 3000
+r2s = np.linspace(0, 1, 10)
 trunc_sig2=[0.1, 1.5]
 trunc_d2=[0.1, 1.5]
 sig2 = np.random.uniform(trunc_sig2[0], trunc_sig2[1], size=n_exps);
@@ -343,7 +412,7 @@ p_thresh = 0.01
 cis = []
 for r2 in tqdm((r2s)):
     pool = mp.Pool(mp.cpu_count())
-    results = [pool.apply(get_hyb_bayes_ci, args=(x.sel(r2er=r2).values, 
+    results = [pool.apply_async(get_hyb_bayes_ci, args=(x.sel(r2er=r2).values, 
                                   y.sel(r2er=r2, exp=exp).values,  
                                 n_r2c_sims, 
                                 alpha_targ, 
@@ -352,11 +421,12 @@ for r2 in tqdm((r2s)):
                                 trunc_sig2, 
                                 trunc_d2)) for exp in (range(n_exps))]
 
+    output = [p.get() for p in results]
     pool.close()   
 
         
         
-    cis.append([ar[:2] for ar in results])
+    cis.append([ar[:2] for ar in output])
 ci_hyb_bayes = np.array(cis)
 
 #%%
@@ -373,6 +443,9 @@ for r2 in tqdm(r2s):
     ciss.append(cis)
 
 ci_npbs = np.array(ciss)
+#%%
+for i in range(6):
+    ci = get_npbs_ci(a_x, a_y, alpha_targ, n_bs_samples=n_bs_samples)
 
 #%% parametric bootstap
 
@@ -389,11 +462,28 @@ for r2 in tqdm(r2s):
     ciss.append(cis)
 
 ci_pbs = np.array(ciss)
+
+
+
+#%%%
+n_bs_samples = 1000
+ciss = []
+for r2 in tqdm(r2s):
+    cis = []
+    for exp in range(n_exps):
+        a_y = y.sel(r2er=r2, exp=exp).values
+        a_x = x.sel(r2er=r2).values
+        ci = get_pbs_bca_ci(a_x, a_y, alpha_targ, n_bs_samples=n_bs_samples)
+        cis.append(ci)
+    ciss.append(cis)
+
+ci_pbs_bca = np.array(ciss)
+
 #%%
 
-ci = xr.DataArray([ci_npbs, ci_pbs, ci_hyb_bayes],
+ci = xr.DataArray([ci_npbs, ci_pbs, ci_pbs_bca, ci_hyb_bayes],
              dims = ['meth', 'r2er', 'exp', 'ci'],
-             coords =[['bs', 'pbs', 'hbys'], r2s, list(range(n_exps)), ['ll', 'ul']],
+             coords =[['bs', 'pbs', 'pbs_bca', 'hbys'], r2s, list(range(n_exps)), ['ll', 'ul']],
              name='cis')
 
 params = xr.DataArray([sig2, d2], dims=['p', 'exp'], 
@@ -406,7 +496,182 @@ ds = xr.Dataset({ci.name:ci,params.name:params,x.name:x,y.name:y})
 ds.to_netcdf('./ci_sim_data_m='+str(m)+'.nc')
 
 #%%
+#%%
 
+ci_pbs_bca_da =xr.DataArray(ci_pbs_bca,
+             dims = [ 'r2er', 'exp', 'ci'],
+             coords = [r2s, list(range(n_exps)), ['ll', 'ul']],
+             name='cis')
+
+
+
+import matplotlib.pyplot as plt
+cis = ci_pbs_bca_da
+r2ers = cis.coords['r2er']
+
+cis_vals = cis.values
+#cis_vals[cis_vals>1] = 1
+#cis_vals[cis_vals<0] = 0
+
+cis[...] = cis_vals
+
+cis = cis[...,:,:]
+
+in_ci = ((cis.sel(ci='ll')<=r2ers)*(cis.sel(ci='ul')>=r2ers)*(cis.sel(ci='ll')!=1)*(cis.sel(ci='ll')!=1)*(cis.sel(ci='ul')!=0))
+
+#%%
+
+'''
+from scipy import stats
+import matplotlib.pyplot as plt
+
+alpha = 0.1
+ind = 3
+a_y = y[0, ind].values
+a_x = x[0].values
+orig_r2c = rc.r2c_n2m(a_x.squeeze(), a_y)[0].squeeze()
+#need percentiles alpha and 1-alpha
+z_alpha = stats.norm.ppf(alpha)
+z_1_alpha = stats.norm.ppf(1-alpha)
+m = a_y.shape[-1]
+n = a_y.shape[-2]
+#get bootstrap factors, or replace this with NPS
+n_bs_samples = 2000
+# y_obs = a_y
+# y_bs = []
+# for k in range(n_bs_samples):
+#     _ = np.array([np.random.choice(y_obs, size=n, replace=True) 
+#                   for y_obs in a_y.T]).T
+#     y_bs.append(_)
+# y_bs = np.array(y_bs)
+# r2c_bs = rc.r2c_n2m(a_x.squeeze(), y_bs)[0].squeeze()
+
+r2c_hat_obs = rc.r2c_n2m(a_x.squeeze(), a_y)[0].squeeze()
+hat_sig2 = s2_hat_obs_n2m(a_y)
+hat_mu2y = mu2_hat_unbiased_obs_n2m(a_y)
+theta = [r2c_hat_obs, hat_sig2, 1, hat_mu2y, m, n] 
+x_new, y_new = pds_n2m_r2c(theta, n_bs_samples, ddof=1)
+
+r2c_pbs = rc.r2c_n2m(x_new.squeeze(), y_new)[0].squeeze()
+
+#jack knife
+jack_r2c = []
+for i in range(m):
+    jack_a_y = np.array([a_y[:,j] for j in range(m) if i!=j]).T
+    jack_a_x = np.array([a_x[j] for j in range(m) if i!=j])
+    _ = rc.r2c_n2m(jack_a_x, jack_a_y)[0].squeeze()
+    jack_r2c.append(_.squeeze())
+    
+jack_r2c = np.array(jack_r2c)
+jack_r2c_dot = jack_r2c.mean()
+
+#need bias correction factor
+z_hat_0 = stats.norm.ppf(np.mean(r2c_pbs<orig_r2c))
+#estimate of coefficient fitt theta-variance relationship as linear
+a_hat = (np.sum((jack_r2c_dot - jack_r2c)**3)/
+         (6.*(np.sum((jack_r2c_dot - jack_r2c)**2))**(3/2.)))
+
+
+alpha_1 = stats.norm.cdf(z_hat_0 + 
+                         (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0)))
+
+alpha_2 = stats.norm.cdf(z_hat_0 + 
+                         (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
+
+plt.hist(r2c_pbs);
+plt.plot([orig_r2c, orig_r2c],[0,50])
+ci_low = np.percentile(r2c_pbs, alpha_1*100)
+ci_high = np.percentile(r2c_pbs, alpha_2*100)
+
+plt.plot([ci_low, ci_low],[0,50])
+plt.plot([ci_high, ci_high],[0,50])
+#%%
+def get_pbs_bca_ci(x,y, alpha_targ, n_bs_samples):
+    #need percentiles alpha and 1-alpha
+    z_alpha = stats.norm.ppf(alpha)
+    z_1_alpha = stats.norm.ppf(1-alpha)
+    m = y.shape[-1]
+    n = y.shape[-2]
+    #get bootstrap factors, or replace this with NPS
+    n_bs_samples = 2000
+    # y_obs = y
+    # y_bs = []
+    # for k in range(n_bs_samples):
+    #     _ = np.array([np.random.choice(y_obs, size=n, replace=True) 
+    #                   for y_obs in y.T]).T
+    #     y_bs.append(_)
+    # y_bs = np.array(y_bs)
+    # r2c_bs = rc.r2c_n2m(a_x.squeeze(), y_bs)[0].squeeze()
+    r2c_hat_obs = rc.r2c_n2m(x.squeeze(), y)[0].squeeze()
+    hat_sig2 = s2_hat_obs_n2m(y)
+    hat_mu2y = mu2_hat_unbiased_obs_n2m(y)
+    theta = [r2c_hat_obs, hat_sig2, 1, hat_mu2y, m, n] 
+    x_new, y_new = pds_n2m_r2c(theta, n_bs_samples, ddof=1)
+    
+    r2c_pbs = rc.r2c_n2m(x_new.squeeze(), y_new)[0].squeeze()
+    
+    #jack knife
+    jack_r2c = []
+    for i in range(m):
+        jack_y = np.array([y[:,j] for j in range(m) if i!=j]).T
+        jack_x = np.array([x[j] for j in range(m) if i!=j])
+        _ = rc.r2c_n2m(jack_x, jack_y)[0].squeeze()
+        jack_r2c.append(_.squeeze())
+        
+    jack_r2c = np.array(jack_r2c)
+    jack_r2c_dot = jack_r2c.mean()
+    
+    #need bias correction factor
+    z_hat_0 = stats.norm.ppf(np.mean(r2c_pbs<r2c_hat_obs))
+    
+    #estimate of coefficient fit theta-variance relationship as linear
+    a_hat = (np.sum((jack_r2c_dot - jack_r2c)**3)/
+             (6.*(np.sum((jack_r2c_dot - jack_r2c)**2))**(3/2.)))
+    
+    
+    alpha_1 = stats.norm.cdf(z_hat_0 + 
+                             (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0)))
+    
+    alpha_2 = stats.norm.cdf(z_hat_0 + 
+                             (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
+    
+    ci_low = np.percentile(r2c_pbs, alpha_1*100)
+    ci_high = np.percentile(r2c_pbs, alpha_2*100)    
+    return [ci_low, ci_high]
+    
+#get_pbs_ci(x, y, alpha_targ, n_pbs_samples=1000)
+
+
+#%%%
+#trying to center around estimate
+b = stats.norm.ppf(np.mean(r2c_bs<=orig_r2c))
+
+a = a_hat
+
+ci_low = np.percentile(r2c_bs, 
+                    100*stats.norm.cdf(
+                        b-(z_alpha-b)/(1+a*(z_alpha-b))))
+
+ci_high = np.percentile(r2c_bs, 
+                    100*stats.norm.cdf(
+                        b-(z_1_alpha-b)/(1+a*(z_1_alpha-b))))
+
+print([ci_low, ci_high])
+
+
+
+import matplotlib.pyplot as plt
+plt.hist(r2c_bs)
+
+#%%
+alpha_2 = stats.norm.cdf(z_hat_0 + (z_hat_0+z_1_alpha)/
+                                     (1-a_hat*(z_hat_0+z_1_alpha)))
+
+
+
+
+
+#%%
 
 # #%%
 # in_cis = []
@@ -437,7 +702,7 @@ ds.to_netcdf('./ci_sim_data_m='+str(m)+'.nc')
 
 
 #%%
-'''
+
 p_thresh=1e-2
 n_r2c_sims = 5000
 int_l=0

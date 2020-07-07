@@ -13,7 +13,6 @@ os.chdir('../../')
 import xarray as xr
 import  matplotlib.pyplot as plt
 import numpy as np
-from r2c_common import r2c_n2n
 
 import pandas as pd
 
@@ -59,7 +58,7 @@ def sig_cor_split(r):
     return s_cor_split
 
 #%%
-load_dir = './data/v1dotd/'
+load_dir = './data/mt_dotd/'
 fns = os.listdir(load_dir)
 fns = [fn for fn in fns if '.nc' in fn ]
 mt = [xr.open_dataarray(load_dir+fn).load() for  fn in fns]
@@ -82,19 +81,20 @@ nms = s.coords['nms']
 
 ss = xr.concat([s[:, 0], s[:, 1]], 'rec')
 ss.coords['rec'] = range(len(ss.coords['rec']))
-ss.to_netcdf('./mt_sqrt_spkcnt.nc')
-mt = xr.open_dataarray('./mt_sqrt_spkcnt.nc')
-
+#ss.to_netcdf('./mt_sqrt_spkcnt.nc')
+#mt = xr.open_dataarray('./mt_sqrt_spkcnt.nc')
+mt = ss
 
 #%%
-#load np allen 
-load_dir = '/loc6tb/data/responses/np_allen/grating/'
+#load np allen  grating
+import os
+load_dir = '../data/responses/allen/np/grating/'
+load_dir = '/Users/dean/Desktop/code/science/modules/r2er_n2m/data/allen/np/np/grating/'
 fns = os.listdir(load_dir)
 fns = [fn for fn in fns if '.nc' in fn ]
 visp_np = [xr.open_dataset(load_dir+fn).load() for  fn in fns]
 visp_np = [visp_ for visp_ in visp_np if len(visp_)>0]
 n_recs = len(visp_np)
-#visp = xr.concat(visp, 'rec')
 
 for i, visp_ in enumerate(visp_np):
     
@@ -111,8 +111,9 @@ visp_np.coords['rec'] = range(n_recs)
 
 #%%
 
-#load np allen 
+#load np allen natural scene
 load_dir = '/loc6tb/data/responses/np_allen/natural_scene/'
+load_dir = '/Users/dean/Desktop/code/science/modules/r2er_n2m/data/allen/np/np/natural_scene/'
 fns = os.listdir(load_dir)
 fns = [fn for fn in fns if '.nc' in fn ]
 visp_np_nat = [xr.open_dataset(load_dir+fn).load() for  fn in fns]
@@ -149,33 +150,37 @@ snr_visp_np_nat = sig/v
 #snr_visp_np = snr_visp_np.stack(c=('rec', 'unit_id')).dropna('stim')
 #%%
 #load ca allen 
-from allensdk.core.brain_observatory_cache import BrainObservatoryCache
-top_dir = '/loc6tb/data/responses/ophys_allen/boc/'
-boc = BrainObservatoryCache(cache=True, 
-                            manifest_file='/loc6tb/data/responses/ophys_allen/boc/brain_observatory_manifest.json')
-lines = boc.get_all_cre_lines()
-depths = boc.get_all_imaging_depths()
-structs = boc.get_all_targeted_structures()
-stim = boc.get_all_stimuli()
+#from allensdk.core.brain_observatory_cache import BrainObservatoryCache
+# top_dir = '/loc6tb/data/responses/ophys_allen/boc/'
+# boc = BrainObservatoryCache(cache=True, 
+#                             manifest_file='/loc6tb/data/responses/ophys_allen/boc/brain_observatory_manifest.json')
+# lines = boc.get_all_cre_lines()
+# depths = boc.get_all_imaging_depths()
+# structs = boc.get_all_targeted_structures()
+# stim = boc.get_all_stimuli()
 
-line = lines[0]
-depth = depths[0]
-struct = structs[0]
+# line = lines[0]
+# depth = depths[0]
+# struct = structs[0]
 
-exps = boc.get_ophys_experiments(
-                  targeted_structures=['VISp',],
-                  stimuli=['static_gratings'],
-                  require_eye_tracking=False)
+# exps = boc.get_ophys_experiments(
+#                   targeted_structures=['VISp',],
+#                   stimuli=['static_gratings'],
+#                   require_eye_tracking=False)
 
-ids = [exp['id']for exp in exps]
 
 load_dir = '/loc6tb/data/responses/ophys_allen/static_stim_resp/grating/'
-visp_ca = [xr.open_dataset(load_dir + str(int(an_id)) + '.nc')['__xarray_dataarray_variable__']
- for an_id in ids]
+load_dir = '/Users/dean/Desktop/code/science/modules/r2er_n2m/data/allen/ca/data/grating/'
 
-load_dir = '/loc6tb/data/responses/ophys_allen/static_stim_resp/natural_scene/'
+#ids = [exp['id'] for exp in exps]
+ids = [int(nm.split('.')[0]) for nm in os.listdir(load_dir) if '.nc' in nm]
+
+visp_ca = [xr.open_dataset(load_dir + str(int(an_id)) + '.nc')['__xarray_dataarray_variable__']
+           for an_id in ids]
+
+load_dir = '/Users/dean/Desktop/code/science/modules/r2er_n2m/data/allen/ca/data/natural_scene/'
 visp_ca_nat = [xr.open_dataset(load_dir + str(int(an_id)) + '.nc')['__xarray_dataarray_variable__']
- for an_id in ids]
+               for an_id in ids]
 
 #exps = boc.get_ophys_experiments(
 #                  targeted_structures=['VISp',],
@@ -190,7 +195,8 @@ visp_ca_nat = [xr.open_dataset(load_dir + str(int(an_id)) + '.nc')['__xarray_dat
 
 
 #%% load APC
-v4 = xr.open_dataset('/home/dean/Desktop/modules/r2c/data/apc370_with_trials.nc')['resp']
+load_dir = '/Users/dean/Desktop/code/science/modules/r2er_n2m/data/apc370_with_trials.nc'
+v4 = xr.open_dataset(load_dir)['resp']
 try:
     v4 = v4.rename({'trials':'trial'})
     v4 = v4.rename({'shapes':'stim'})
@@ -205,12 +211,12 @@ for cell in range(109):
 v4_apc = xr.concat(ys, 'unit')
 
 #%% load FO
-v4_fo = xr.open_dataset('/home/dean/Desktop/modules/r2c/data/fo.nc')
+v4_fo = xr.open_dataset('/Users/dean/Desktop/code/science/modules/r2er_n2m/data/fo.nc')
 v4_fo = v4_fo['__xarray_dataarray_variable__']*.3
 v4_fo_s = v4_fo**0.5
 
 #%%
-labels = ['dot', 'fo', 
+labels = ['dot', 'f', 'o', 
           'apc', 'aNP', 
           'aCA'] 
 params = pd.DataFrame(np.zeros((len(labels), 2)), 
@@ -219,53 +225,41 @@ params = pd.DataFrame(np.zeros((len(labels), 2)),
 
 # will need table of m, n, s^2, and var mean_resp
 #wyeth v1
-v1_s = v1.sel(t=slice(0, 2), unit=0)
 
-s = v1_s.sum('t', min_count=1)
-s = s**0.5
-v = s.var('trial_tot', skipna=True).mean('dir')
-sig = s.mean('trial_tot', skipna=True).var('dir', ddof=0)
+v = mt.var('trial_tot', skipna=True).mean('dir')
+sig = mt.mean('trial_tot', skipna=True).var('dir', ddof=0)
 
 ns = (~s.isnull()).sum('trial_tot').mean('dir')
-m = len(v1_s.coords['dir'])
-snr_v1 = sig - (m/(m-1))*v/ns
-snr_v1 = sig/v
+m = len(mt_s.coords['dir'])
+snr_mt = sig - (m/(m-1))*v/ns
+snr_mt = sig/v
 
 params.loc['dot'] = [ns.mean().values, m]
 
 #%%
 #fo v4
-v4_fo_s = v4_fo**0.5
-ns = (~v4_fo_s.isnull()).sum('trial', skipna=True).mean(('stim','fo'), skipna=True)
-m = len(v4_fo_s.coords['stim'])
-v = v4_fo_s.var('trial', skipna=True).mean('stim').mean('fo')
-sig = v4_fo_s.mean('trial', skipna=True).var(('stim', 'fo'), ddof=0)
+
+v4_f_s = v4_fo.sel(fo=0)**0.5
+ns = (~v4_f_s.isnull()).sum('trial', skipna=True).mean(('stim'), skipna=True)
+m = len(v4_f_s.coords['stim'])
+v = v4_f_s.var('trial', skipna=True).mean('stim')
+sig = v4_f_s.mean('trial', skipna=True).var('stim')
 sig = sig - (m/(m-1))*v/ns
-snr_v4_fo = sig/v
-params.loc['fo'] = [ns.mean().values, m]
+snr_v4_f = sig/v
+params.loc['f'] = [ns.mean().values, m]
 
 
-ns = (~v4_fo_s.isnull()).sum('trial', skipna=True).mean(('stim'), skipna=True)
-m = len(v4_fo_s.coords['stim'])
-v = v4_fo_s.var('trial', skipna=True).mean('stim')
-sig = v4_fo_s.mean('trial', skipna=True).var(('stim'), ddof=0)
+v4_o_s = v4_fo.sel(fo=1)**0.5
+ns = (~v4_o_s.isnull()).sum('trial', skipna=True).mean(('stim'), skipna=True)
+m = len(v4_o_s.coords['stim'])
+v = v4_o_s.var('trial', skipna=True).mean('stim')
+sig = v4_o_s.mean('trial', skipna=True).var('stim')
 sig = sig - (m/(m-1))*v/ns
-snr_v4_fo_spl = sig/v
+snr_v4_o = sig/v
+params.loc['o'] = [ns.mean().values, m]
 
 
-#plt.hist(snr_v4_fo_spl[:,0], cumulative=True, 
-#                 normed=True, bins=1000, 
-#                 histtype='step',
-#                 lw=3)
-#plt.hist(snr_v4_fo_spl[:,1], cumulative=True, 
-#                 normed=True, bins=1000, 
-#                 histtype='step',
-#                 lw=3)
-#plt.hist(snr_v4_fo, cumulative=True, 
-#                 normed=True, bins=1000, 
-#                 histtype='step',
-#                 lw=3)
-#plt.legend(['f', 'o', 'fo'])
+
 
 
 #%%
@@ -334,45 +328,66 @@ for visp_ca_s in visp_ca_nat:
 snr_visp_ca_ss_nat = np.concatenate(snr_visp_ca_ss_nat)
 
 #%%
-labels = ['MT dot motion 2s ', 'V4 fill-outline shapes 0.3s', 
-          'V4 fill shapes 0.5s', 'VISp gratings Allen NP 0.25s',
+import matplotlib as mpl
+def fix_hist_step_vertical_line_at_end(ax):
+    axpolygons = [poly for poly in ax.get_children() if isinstance(poly, mpl.patches.Polygon)]
+    for poly in axpolygons:
+        poly.set_xy(poly.get_xy()[:-1])
+    
+labels = ['MT dot motion 2s ',
+          'V4 fill shapes 0.3s (2019)', 
+          'V4 outline shapes 0.3s', 
+          'V4 fill shapes 0.5s (2001)',
+          'VISp gratings Allen NP 0.25s',
           'VISp natural Allen NP 0.25s', 
           'VISp gratings Allen Ca img.', 
           'VISp natural Allen Ca img.'] 
-snrs = [snr_v1,  snr_v4_fo, snr_v4_apc, snr_visp_np, snr_visp_np_nat, 
-        snr_visp_ca_ss, snr_visp_ca_ss_nat]
+snrs = [snr_mt,  
+        snr_v4_f,  
+        snr_v4_o, 
+        snr_v4_apc, 
+        snr_visp_np, 
+        snr_visp_np_nat, 
+        snr_visp_ca_ss, 
+        snr_visp_ca_ss_nat]
 
-snr_t = np.array([2/0.25, 0.3/0.25, 0.5/0.25, 0.25/0.25, 0.25, 1,1])
 plt.figure(figsize=(8,4))
+snr_t = np.array([2, 0.3, 0.3, 0.5, 0.25, 0.25, 1, 1])
+
 for i in range(2): 
     plt.subplot(1,2,i+1)
     if i == 1:
-        snr_t = np.array([2, 0.3, 0.5, 0.25, 0.25, 1,1])
+        snr_t = np.array([2, 0.3, 0.3, 0.5, 0.25, 0.25, 1, 1])
     else:
         snr_t[...] = 1
     snrs_t = [snrs[i]/snr_t[i] for i in range(len(labels))]
-    for snr in snrs_t:
-        plt.hist(snr, cumulative=True, 
-                 density=True, bins=1000, 
-                 histtype='step',
-                 lw=3)
+    for t, snr in enumerate(snrs_t):
+        ax = plt.gca()
+        cnt, edges = np.histogram(snr, bins=10000, density=1)
+        # plot the data as a step plot.  note that edges has an extra right edge.
+        ax.step(edges[:-1], cnt.cumsum()/cnt.sum(), lw=2)
+
+        #fix_hist_step_vertical_line_at_end(ax)
+    plt.semilogx()    
+
     plt.yticks(np.linspace(0,1,5))
-    plt.xticks(np.linspace(0,10,11))
-    plt.xlim(0.001,100)
+    plt.xticks(np.logspace(-3, 2, 6))
+    plt.xlim(1e-3,1e2)
     plt.ylim(0,1.1)
     plt.grid()
     if i==0:
-        plt.xlabel(r'$\hat{SNR}$')
+        plt.xlabel(r'$\widehat{SNR}$')
         plt.ylabel('Cumulative fraction units')
         plt.title('SNR of original experiment')
     else:
         plt.gca().set_yticklabels([])
         plt.title('SNR per second')
-    plt.semilogx()    
+
 plt.legend(labels, loc=(1,0), fontsize=8)
 plt.tight_layout()
-plt.savefig('./figs/snr_dist_plots.pdf')
+plt.savefig('./snr_dist_plots.pdf')
 #%%
+'''
 for snr in snrs:
     print(np.median(snr))
     print(len(snr))
@@ -1261,3 +1276,4 @@ print(stats.spearmanr(cor_da['n_cor'][ind], (cor_da['w_r_n'])[ind]))
 plt.scatter()
 ind = ~(cor_da[nms[i]]<np.median(cor_da[nms[i]])).values
 print(stats.spearmanr(cor_da['n_cor'][ind], (cor_da['w_r_n'])[ind]))     
+'''
