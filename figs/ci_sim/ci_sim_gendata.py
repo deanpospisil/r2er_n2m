@@ -20,7 +20,7 @@ import multiprocessing as mp
 
 def percentile(x,q):
     inds = np.argsort(x)
-    ind = int((len(x)-1)*q/100)
+    ind = int((len(x)-1)*q/100.)
     val = x[inds[ind]]
     return val
     
@@ -319,8 +319,8 @@ def get_pbs_ci(x, y, alpha_targ, n_pbs_samples=1000):
 
 def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
     #need percentiles alpha and 1-alpha
-    z_alpha = stats.norm.ppf(alpha/2)
-    z_1_alpha = stats.norm.ppf(1-alpha/2)
+    z_alpha = stats.norm.ppf(alpha/2.)
+    z_1_alpha = stats.norm.ppf(1-alpha/2.)
     m = y.shape[-1]
     n = y.shape[-2]
     #get bootstrap factors, or replace this with NPS
@@ -352,7 +352,8 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
     jack_r2c_dot = jack_r2c.mean()
     
     #need bias correction factor
-    z_hat_0 = stats.norm.ppf(np.mean(r2c_pbs<r2c_hat_obs))
+    bias_factor = np.mean(r2c_pbs<r2c_hat_obs)
+    z_hat_0 = stats.norm.ppf(bias_factor)
     
     #estimate of coefficient fit theta-variance relationship as linear
     a_hat = (np.sum((jack_r2c_dot - jack_r2c)**3)/
@@ -365,19 +366,36 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
     alpha_2 = stats.norm.cdf(z_hat_0 + 
                              (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
     
+
+        
+        
+        
+        
+    
+    
     #ci_low = np.nanpercentile(r2c_pbs, alpha_1*100, interpolation='lower')
     #ci_high = np.nanpercentile(r2c_pbs, alpha_2*100, interpolation='lower')  
-    
-    ci_low = percentile(r2c_pbs, alpha_1*100)
-    ci_high = percentile(r2c_pbs, alpha_2*100)
-    
+    try:
+        ci_low = percentile(r2c_pbs, alpha_1*100.)
+        ci_high = percentile(r2c_pbs, alpha_2*100.)
+    except:
+        print('alpha_1=' + str(alpha_1))
+        print('alpha_2='  + str(alpha_2))
+        print('jack_r2c_dot='  + str(jack_r2c_dot))
+        print('r2c_hat_obs='  + str(r2c_hat_obs))
+        print('bias_factor='  + str(bias_factor))
+        print('z_hat_0='  + str(z_hat_0))
+        print('a_hat='  + str(a_hat))
+        print('r2c_pbs='  + str(r2c_pbs))
+        print('jack_r2c='  + str(r2c_pbs))
+        
     return [ci_low, ci_high]
 
 #%% set of parameters over which to test
 m = 40
 n =  4
-n_exps = 4000
-r2s = np.linspace(0, 1, 10)
+n_exps = 3000
+r2s = np.linspace(0, 1, 20)
 trunc_sig2=[0.1, 1.5]
 trunc_d2=[0.1, 1.5]
 sig2 = np.random.uniform(trunc_sig2[0], trunc_sig2[1], size=n_exps);
@@ -435,33 +453,32 @@ n_bs_samples = 1000
 ciss = []
 for r2 in tqdm(r2s):
     cis = []
-    for exp in range(n_exps):
-        a_y = y.sel(r2er=r2, exp=exp).values
-        a_x = x.sel(r2er=r2).values
-        ci = get_npbs_ci(a_x, a_y, alpha_targ, n_bs_samples=n_bs_samples)
-        cis.append(ci)
-    ciss.append(cis)
-
+    pool = mp.Pool(mp.cpu_count())
+    results = [pool.apply_async(get_npbs_ci, args=(x.sel(r2er=r2).values, 
+                         y.sel(r2er=r2, exp=exp).values, 
+                         alpha_targ, n_bs_samples)) 
+                            for exp in range(n_exps)]
+    output = [p.get() for p in results]
+    pool.close()   
+    ciss.append([ar for ar in output])
 ci_npbs = np.array(ciss)
-#%%
-for i in range(6):
-    ci = get_npbs_ci(a_x, a_y, alpha_targ, n_bs_samples=n_bs_samples)
 
 #%% parametric bootstap
-
 print('npbs')
-n_pbs_samples = 1000
+n_bs_samples = 1000
 ciss = []
 for r2 in tqdm(r2s):
     cis = []
-    for exp in range(n_exps):
-        a_y = y.sel(r2er=r2, exp=exp).values
-        a_x = x.sel(r2er=r2).values
-        ci = get_pbs_ci(a_x, a_y, alpha_targ, n_pbs_samples=n_pbs_samples)
-        cis.append(ci)
-    ciss.append(cis)
-
+    pool = mp.Pool(mp.cpu_count())
+    results = [pool.apply_async(get_pbs_ci, args=(x.sel(r2er=r2).values, 
+                         y.sel(r2er=r2, exp=exp).values, 
+                         alpha_targ, n_bs_samples)) 
+                            for exp in range(n_exps)]
+    output = [p.get() for p in results]
+    pool.close()   
+    ciss.append([ar for ar in output])
 ci_pbs = np.array(ciss)
+
 
 
 
@@ -470,14 +487,16 @@ n_bs_samples = 1000
 ciss = []
 for r2 in tqdm(r2s):
     cis = []
-    for exp in range(n_exps):
-        a_y = y.sel(r2er=r2, exp=exp).values
-        a_x = x.sel(r2er=r2).values
-        ci = get_pbs_bca_ci(a_x, a_y, alpha_targ, n_bs_samples=n_bs_samples)
-        cis.append(ci)
-    ciss.append(cis)
-
+    pool = mp.Pool(mp.cpu_count())
+    results = [pool.apply_async(get_pbs_bca_ci, args=(x.sel(r2er=r2).values, 
+                         y.sel(r2er=r2, exp=exp).values, 
+                         alpha_targ, n_bs_samples)) 
+                            for exp in range(n_exps)]
+    output = [p.get() for p in results]
+    pool.close()   
+    ciss.append([ar for ar in output])
 ci_pbs_bca = np.array(ciss)
+
 
 #%%
 
