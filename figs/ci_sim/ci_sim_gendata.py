@@ -423,8 +423,8 @@ y = xr.DataArray(yss, dims=['r2er', 'exp', 'n', 'm'],
 
 #%% run each ci method on the same data and store need to make xarray to save results.
 print('bayes')
-n_splits = 2
-n_r2c_sims = 10
+n_splits = 100
+n_r2c_sims = 1000
 p_thresh = 0.01
 
 cis = []
