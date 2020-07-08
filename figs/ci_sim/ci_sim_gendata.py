@@ -376,7 +376,7 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
 #%% set of parameters over which to test
 m = 40
 n =  4
-n_exps = 3000
+n_exps = 4000
 r2s = np.linspace(0, 1, 10)
 trunc_sig2=[0.1, 1.5]
 trunc_d2=[0.1, 1.5]
@@ -497,7 +497,7 @@ ds.to_netcdf('./ci_sim_data_m='+str(m)+'.nc')
 
 #%%
 #%%
-
+'''
 ci_pbs_bca_da =xr.DataArray(ci_pbs_bca,
              dims = [ 'r2er', 'exp', 'ci'],
              coords = [r2s, list(range(n_exps)), ['ll', 'ul']],
@@ -518,7 +518,7 @@ cis[...] = cis_vals
 cis = cis[...,:,:]
 
 in_ci = ((cis.sel(ci='ll')<=r2ers)*(cis.sel(ci='ul')>=r2ers)*(cis.sel(ci='ll')!=1)*(cis.sel(ci='ll')!=1)*(cis.sel(ci='ul')!=0))
-
+'''
 #%%
 
 '''
