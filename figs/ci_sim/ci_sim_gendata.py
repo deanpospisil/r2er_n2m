@@ -323,15 +323,6 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
     z_1_alpha = stats.norm.ppf(1-alpha/2.)
     m = y.shape[-1]
     n = y.shape[-2]
-    #get bootstrap factors, or replace this with NPS
-    # y_obs = y
-    # y_bs = []
-    # for k in range(n_bs_samples):
-    #     _ = np.array([np.random.choice(y_obs, size=n, replace=True) 
-    #                   for y_obs in y.T]).T
-    #     y_bs.append(_)
-    # y_bs = np.array(y_bs)
-    # r2c_bs = rc.r2c_n2m(a_x.squeeze(), y_bs)[0].squeeze()
     r2c_hat_obs = rc.r2c_n2m(x.squeeze(), y)[0].squeeze()
     hat_sig2 = s2_hat_obs_n2m(y)
     hat_mu2y = mu2_hat_unbiased_obs_n2m(y)
@@ -360,13 +351,18 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
              (6.*(np.sum((jack_r2c_dot - jack_r2c)**2))**(3/2.)))
     
     
-    alpha_1 = stats.norm.cdf(z_hat_0 + 
-                             (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0)))
+    if z_hat_0==np.inf:
+        alpha_1 = 1
+        alpha_2 = 1
+    elif z_hat_0==-np.inf:
+        alpha_1 = 0
+        alpha_2 = 0
+    else:
+        alpha_1 = stats.norm.cdf(z_hat_0 + 
+                                 (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0))) 
+        alpha_2 = stats.norm.cdf(z_hat_0 + 
+                                 (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
     
-    alpha_2 = stats.norm.cdf(z_hat_0 + 
-                             (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
-    
-
     #ci_low = np.nanpercentile(r2c_pbs, alpha_1*100, interpolation='lower')
     #ci_high = np.nanpercentile(r2c_pbs, alpha_2*100, interpolation='lower')  
     ci_low = np.nan
@@ -389,9 +385,9 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
     return [ci_low, ci_high]
 
 #%% set of parameters over which to test
-m = 40
+m = 50
 n =  4
-n_exps = 3000
+n_exps = 5000
 r2s = np.linspace(0, 1, 20)
 trunc_sig2=[0.1, 1.5]
 trunc_d2=[0.1, 1.5]
@@ -419,8 +415,8 @@ y = xr.DataArray(yss, dims=['r2er', 'exp', 'n', 'm'],
                  coords=[list(r2s),] + [range(s) for s in yss.shape[1:]], name='y')
 
 #%% run each ci method on the same data and store need to make xarray to save results.
-
-n_bs_samples = 1000
+print()
+n_bs_samples = 5000
 ciss = []
 for r2 in tqdm(r2s):
     cis = []
@@ -434,12 +430,10 @@ for r2 in tqdm(r2s):
     ciss.append([ar for ar in output])
 ci_pbs_bca = np.array(ciss)
 
-
-
 #%%
 print('bayes')
 n_splits = 100
-n_r2c_sims = 1000
+n_r2c_sims = 5000
 p_thresh = 0.01
 
 cis = []
@@ -464,7 +458,6 @@ ci_hyb_bayes = np.array(cis)
 
 #%%
 print('bs')
-n_bs_samples = 1000
 ciss = []
 for r2 in tqdm(r2s):
     cis = []
@@ -480,7 +473,6 @@ ci_npbs = np.array(ciss)
 
 #%% parametric bootstap
 print('npbs')
-n_bs_samples = 1000
 ciss = []
 for r2 in tqdm(r2s):
     cis = []
@@ -493,10 +485,6 @@ for r2 in tqdm(r2s):
     pool.close()   
     ciss.append([ar for ar in output])
 ci_pbs = np.array(ciss)
-
-
-
-
 
 #%%
 
@@ -792,3 +780,11 @@ for split in range(n_splits):
 print((res>r2c_hat_obs).sum()/ n_r2c_sims)
 print(split/n_splits)
 '''
+
+
+#%%
+z_hat_0 = -np.inf
+a_hat = 0
+z_alpha = 0.8
+_ = (z_hat_0 + (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0)))
+print(_)
