@@ -367,14 +367,10 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
                              (z_1_alpha + z_hat_0)/(1 - a_hat*(z_1_alpha + z_hat_0)))
     
 
-        
-        
-        
-        
-    
-    
     #ci_low = np.nanpercentile(r2c_pbs, alpha_1*100, interpolation='lower')
     #ci_high = np.nanpercentile(r2c_pbs, alpha_2*100, interpolation='lower')  
+    ci_low = np.nan
+    ci_high = np.nan
     try:
         ci_low = percentile(r2c_pbs, alpha_1*100.)
         ci_high = percentile(r2c_pbs, alpha_2*100.)
@@ -388,6 +384,7 @@ def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
         print('a_hat='  + str(a_hat))
         print('r2c_pbs='  + str(r2c_pbs))
         print('jack_r2c='  + str(r2c_pbs))
+
         
     return [ci_low, ci_high]
 
