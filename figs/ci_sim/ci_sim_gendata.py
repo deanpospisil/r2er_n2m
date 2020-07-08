@@ -422,6 +422,24 @@ y = xr.DataArray(yss, dims=['r2er', 'exp', 'n', 'm'],
                  coords=[list(r2s),] + [range(s) for s in yss.shape[1:]], name='y')
 
 #%% run each ci method on the same data and store need to make xarray to save results.
+
+n_bs_samples = 1000
+ciss = []
+for r2 in tqdm(r2s):
+    cis = []
+    pool = mp.Pool(mp.cpu_count())
+    results = [pool.apply_async(get_pbs_bca_ci, args=(x.sel(r2er=r2).values, 
+                         y.sel(r2er=r2, exp=exp).values, 
+                         alpha_targ, n_bs_samples)) 
+                            for exp in range(n_exps)]
+    output = [p.get() for p in results]
+    pool.close()   
+    ciss.append([ar for ar in output])
+ci_pbs_bca = np.array(ciss)
+
+
+
+#%%
 print('bayes')
 n_splits = 100
 n_r2c_sims = 1000
@@ -481,21 +499,6 @@ ci_pbs = np.array(ciss)
 
 
 
-
-#%%%
-n_bs_samples = 1000
-ciss = []
-for r2 in tqdm(r2s):
-    cis = []
-    pool = mp.Pool(mp.cpu_count())
-    results = [pool.apply_async(get_pbs_bca_ci, args=(x.sel(r2er=r2).values, 
-                         y.sel(r2er=r2, exp=exp).values, 
-                         alpha_targ, n_bs_samples)) 
-                            for exp in range(n_exps)]
-    output = [p.get() for p in results]
-    pool.close()   
-    ciss.append([ar for ar in output])
-ci_pbs_bca = np.array(ciss)
 
 
 #%%
