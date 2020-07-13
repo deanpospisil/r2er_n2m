@@ -400,8 +400,8 @@ def get_hyb_bayes_ci(x, y, n_r2c_sims=1000, alpha_targ=0.1, p_thresh=0.01, n_spl
 
 #%%I first need a generating process upon which the ci methods can act.
 #r2_er = 0
-r2ers = list(np.linspace(0,1))
-n_exps = 200
+r2ers = list(np.linspace(0, 1, 100))
+n_exps = 2000
 trace_samps = 5000
 sig2 = 0.25
 d2 = 0.25

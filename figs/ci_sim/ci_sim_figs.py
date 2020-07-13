@@ -13,8 +13,8 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 
-ds = xr.open_dataset('ci_sim_data_m=50.nc')
-params = ds['params'].attrs
+ds = xr.open_dataset('ci_sim_data_m=40.nc')
+#params = ds['params'].attrs
 cis = ds['cis']
 r2ers = cis.coords['r2er']
 
