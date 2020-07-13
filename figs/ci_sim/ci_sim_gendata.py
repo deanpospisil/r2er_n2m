@@ -216,9 +216,9 @@ def find_sgn_p_cand(r2c_check, r2c_hat_obs, alpha_targ, trace, m, n,
     
     #checks on the cdf of r2c whether the observed r2c_hat_obs is
     #above the desired cdf value +1
-    #null the desired cdf value
-    #below
-    z_thresh = norm.ppf(1.-p_thresh)
+    #null the desired cdf value 0
+    #below the desired cdf value -1
+    z_thresh = norm.ppf(1.-p_thresh)#the z-value
     res = get_emp_dist_r2er(r2c_check, r2c_hat_obs,  trace, m, n,
                     p_thresh=p_thresh, n_r2c_sims = n_r2c_sims)
 
@@ -226,7 +226,7 @@ def find_sgn_p_cand(r2c_check, r2c_hat_obs, alpha_targ, trace, m, n,
     count = (res<r2c_hat_obs).sum()
 
     z = ((count - alpha_targ*n_r2c_sims)/
-         (n_r2c_sims*alpha_targ*(1-alpha_targ))**0.5)
+         (n_r2c_sims*alpha_targ*(1-alpha_targ))**0.5)#get z score for this count
     
     sgn_p_cand = np.nan
     if z>z_thresh:
@@ -253,8 +253,16 @@ def find_cdf_pos(r2c_hat_obs, alpha_targ, trace, m, n, n_splits=6,
                                  trace=trace, m=m, n=n,
                                  p_thresh=p_thresh, n_r2c_sims=n_r2c_sims)
     
+    #we first check if 1 has a proportion less than r2er_obs
+    #which is greater or essentially equal to the target then you cannot increase
+    # the upper limit than 1 and so you stop.
     if sgn_p_cand_h==1 or sgn_p_cand_h==0:
         return int_h, res
+    
+        
+    #we first check if 0 has a proportion less than r2er_obs
+    #which is less than or essentially equal to the target then you cannot increase
+    # the upper limit than 1 and so you stop.
     if sgn_p_cand_l==-1 or sgn_p_cand_l==0:
         return int_l, res
 
@@ -317,7 +325,7 @@ def get_pbs_ci(x, y, alpha_targ, n_pbs_samples=1000):
 
     return ci
 
-def get_pbs_bca_ci(x,y, alpha, n_bs_samples):
+def get_pbs_bca_ci(x, y, alpha, n_bs_samples):
     #need percentiles alpha and 1-alpha
     z_alpha = stats.norm.ppf(alpha/2.)
     z_1_alpha = stats.norm.ppf(1-alpha/2.)
@@ -782,9 +790,3 @@ print(split/n_splits)
 '''
 
 
-#%%
-z_hat_0 = -np.inf
-a_hat = 0
-z_alpha = 0.8
-_ = (z_hat_0 + (z_alpha + z_hat_0)/(1 - a_hat*(z_alpha + z_hat_0)))
-print(_)

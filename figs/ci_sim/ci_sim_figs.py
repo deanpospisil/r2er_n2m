@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 
-ds = xr.open_dataset('ci_sim_data_m=40.nc')
+ds = xr.open_dataset('ci_sim_data_m=50.nc')
 params = ds['params'].attrs
 cis = ds['cis']
 r2ers = cis.coords['r2er']
@@ -52,13 +52,13 @@ for i in range(s.shape[0]):
 rej = ps<(0.01/(np.product(s.shape)))
 rej_uneven = ps_uneven<(0.01/(np.product(s.shape)))
 
-colors = ['c', 'r', 'g']
-for i in range(3): 
+colors = ['c', 'r', 'g', 'orange']
+for i in range(4): 
     #plt.errorbar(r2ers, ms[:,i], yerr=ses[:,i], color=colors[i])
     plt.errorbar(r2ers, ms[:,i],color=colors[i])
-plt.legend(['Non-parametric bootstrap', 'Parametric bootstrap', 'Hybrid bayes'])
+plt.legend(['Non-parametric bootstrap', 'Parametric bootstrap', 'bca','Hybrid bayes'])
 
-for i in range(3):
+for i in range(4):
     plt.scatter(r2ers[rej[:,i]], -0.05 + (ms)[:,i][rej[:,i]], marker='*', edgecolors=colors[i], facecolors='none')
     plt.scatter(r2ers[rej_uneven[:,i]], 0.05+(ms)[:,i][rej_uneven[:,i]], edgecolors=colors[i], facecolors=colors[i])
 
@@ -130,3 +130,13 @@ for i in range(s.shape[0]):
         ps_uneven[i,j] = p
 
 #%%
+in_ci = ((cis.sel(ci='ll')<=r2ers)*(cis.sel(ci='ul')>=r2ers)).mean('exp')
+print(in_ci)
+in_ci = ((cis.sel(ci='ll')<=r2ers)*(cis.sel(ci='ul')>=r2ers)*(cis.sel(ci='ll')!=1)
+         *(cis.sel(ci='ll')!=1)*(cis.sel(ci='ul')!=0)).mean('exp')
+print(in_ci)
+
+
+#%%
+print((cis.sel(r2er=0, ci='ul')==0).mean('exp'))
+print((cis.sel(r2er=0, ci='ll')>0).mean('exp'))
